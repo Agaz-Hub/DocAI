@@ -1,121 +1,229 @@
-# Disease Prediction API
+# Disease Prediction API Server
 
-FastAPI backend server for predicting diseases based on symptoms using a trained Keras model.
+A FastAPI-powered REST API server that predicts diseases based on symptoms using a trained deep learning model (Keras/TensorFlow).
 
-## Features
+## 🚀 Quick Start
 
-- **POST /predict**: Predict disease from a list of symptoms
-- **POST /predict/batch**: Predict diseases for multiple symptom sets
-- **GET /symptoms**: Get all available symptoms
-- **GET /diseases**: Get all possible diseases
-- **GET /**: Health check endpoint
+### Option 1: Use Startup Script
 
-## Installation
-
-### First Time Setup
-
-1. Install dependencies:
+**Windows:**
 
 ```bash
+start.bat
+```
+
+**Linux/Mac:**
+
+```bash
+chmod +x start.sh
+./start.sh
+```
+
+### Option 2: Manual Setup
+
+```bash
+# 1. Activate virtual environment
+# Windows:
+myenv\Scripts\activate
+# Linux/Mac:
+source myenv/bin/activate
+
+# 2. Install dependencies
 pip install -r requirements.txt
-```
 
-2. Generate metadata file (only needed once if you have the CSV):
-
-```bash
-python setup_metadata.py
-```
-
-This creates `model_metadata.json` from the CSV file. After this, you can delete the large CSV file!
-
-## Running the Server
-
-```bash
-# Using Python directly
+# 3. Run server
 python main.py
-
-# Or using Uvicorn
-uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-The server will start at `http://localhost:8000`
+🌐 **Server runs at:** http://localhost:8000
 
-## API Documentation
+## � API Documentation
 
-Once the server is running, visit:
+Interactive API documentation available at:
 
-- Swagger UI: `http://localhost:8000/docs`
-- ReDoc: `http://localhost:8000/redoc`
+- **Swagger UI**: http://localhost:8000/docs
+- **ReDoc**: http://localhost:8000/redoc
 
-## API Endpoints
+## 🔌 API Endpoints
 
-### 1. Health Check
+### Health & Info
 
-```
-GET /
-```
+- `GET /` - Basic health check
+- `GET /health` - Detailed server status
+- `GET /symptoms` - List all available symptoms (377 symptoms)
+- `GET /diseases` - List all possible diseases (773 diseases)
 
-### 2. Get All Symptoms
+### Prediction
 
-```
-GET /symptoms
-```
+- `POST /predict` - Predict disease from symptoms
+- `POST /predict/batch` - Batch prediction for multiple cases
 
-### 3. Get All Diseases
+### Example Request
 
-```
-GET /diseases
-```
-
-### 4. Predict Disease (Single)
-
-```
-POST /predict
-Content-Type: application/json
-
-{
-  "symptoms": [
-    "fever",
-    "cough",
-    "headache"
-  ]
-}
+```bash
+curl -X POST "http://localhost:8000/predict" \
+  -H "Content-Type: application/json" \
+  -d '{"symptoms": ["fever", "cough", "headache"]}'
 ```
 
-Response:
+### Example Response
 
 ```json
 {
-  "predicted_disease": "influenza",
+  "predicted_disease": "Common Cold",
   "confidence": 0.85,
   "top_3_predictions": [
-    {
-      "disease": "influenza",
-      "confidence": 0.85
-    },
-    {
-      "disease": "common cold",
-      "confidence": 0.1
-    },
-    {
-      "disease": "pneumonia",
-      "confidence": 0.05
-    }
+    { "disease": "Common Cold", "confidence": 0.85 },
+    { "disease": "Influenza", "confidence": 0.1 },
+    { "disease": "Bronchitis", "confidence": 0.03 }
   ]
 }
+```
+
+## ⚙️ Configuration
+
+The server can be configured via environment variables in the `.env` file:
+
+| Variable          | Description                            | Default               |
+| ----------------- | -------------------------------------- | --------------------- |
+| `HOST`            | Server host address                    | `0.0.0.0`             |
+| `PORT`            | Server port                            | `8000`                |
+| `ENVIRONMENT`     | Mode (`development`/`production`)      | `development`         |
+| `ALLOWED_ORIGINS` | CORS allowed origins (comma-separated) | `*`                   |
+| `MODEL_PATH`      | Path to Keras model file               | `model10.keras`       |
+| `METADATA_PATH`   | Path to metadata JSON                  | `model_metadata.json` |
+
+## 🛠️ Tech Stack
+
+- **FastAPI** - Modern web framework
+- **TensorFlow/Keras** - Deep learning model
+- **Uvicorn** - ASGI server
+- **Pydantic** - Data validation
+- **Python-dotenv** - Environment management
+
+## 📦 Project Structure
+
+```
+DocAI/
+├── main.py                 # FastAPI server application
+├── model10.keras          # Trained ML model
+├── model_metadata.json    # Symptoms and disease labels
+├── requirements.txt       # Python dependencies
+├── .env                   # Environment configuration
+├── start.bat             # Windows startup script
+└── start.sh              # Linux/Mac startup script
+```
+
+## 🧪 Testing
+
+Test the API using the included test script:
+
+```bash
+python test_api.py
+```
+
+Or manually test endpoints:
+
+```bash
+# Health check
+curl http://localhost:8000/health
+
+# Get symptoms
+curl http://localhost:8000/symptoms
+
+# Predict disease
+curl -X POST http://localhost:8000/predict \
+  -H "Content-Type: application/json" \
+  -d '{"symptoms": ["fever", "cough"]}'
+```
+
+## 🐳 Docker Support
+
+Run with Docker:
+
+```bash
+# Using Docker Compose
+docker-compose up -d
+
+# Or build and run manually
+docker build -t disease-api .
+docker run -p 8000:8000 disease-api
+```
+
+## 🚀 Deployment
+
+The server is deployment-ready for:
+
+- **Heroku**: Uses `Procfile` and `runtime.txt`
+- **Docker**: Uses `Dockerfile` and `docker-compose.yml`
+- **Cloud platforms**: Railway, Render, AWS, GCP, Azure
+
+For production deployment:
+
+1. Set `ENVIRONMENT=production` in `.env`
+2. Update `ALLOWED_ORIGINS` with your frontend URLs
+3. Use `start-production.sh/.bat` for Gunicorn server
+
+## 🔒 Security Notes
+
+- In production, update `ALLOWED_ORIGINS` to specific domains
+- Keep `.env` file secure and never commit it
+- Model files are required for server to start
+
+## 📝 Model Information
+
+- **Total Symptoms**: 377
+- **Total Diseases**: 773
+- **Model Type**: Deep Neural Network (Keras)
+- **Input**: Binary vector of symptoms
+- **Output**: Disease prediction with confidence scores
+
+## 🐛 Troubleshooting
+
+**Port already in use:**
+
+```bash
+# Windows
+netstat -ano | findstr :8000
+taskkill /PID <PID> /F
+
+# Linux/Mac
+lsof -ti:8000 | xargs kill -9
+```
+
+**Model not loading:**
+
+- Verify `model10.keras` exists in root directory
+- Verify `model_metadata.json` exists in root directory
+
+**CORS errors:**
+
+- Update `ALLOWED_ORIGINS` in `.env` file
+
+## 📄 License
+
+Educational/Research Project
+"disease": "pneumonia",
+"confidence": 0.05
+}
+]
+}
+
 ```
 
 ### 5. Predict Disease (Batch)
 
 ```
+
 POST /predict/batch
 Content-Type: application/json
 
 [
-  ["fever", "cough"],
-  ["headache", "nausea"]
+["fever", "cough"],
+["headache", "nausea"]
 ]
-```
+
+````
 
 ## Example Client Code
 
@@ -142,7 +250,7 @@ print(f"Confidence: {result['confidence']:.2%}")
 print("\nTop 3 Predictions:")
 for pred in result['top_3_predictions']:
     print(f"  - {pred['disease']}: {pred['confidence']:.2%}")
-```
+````
 
 ### JavaScript/Fetch Client
 

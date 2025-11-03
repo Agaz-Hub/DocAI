@@ -6,23 +6,87 @@ import numpy as np
 from typing import List
 import json
 import os
+from dotenv import load_dotenv
+from contextlib import asynccontextmanager
 
-# Initialize FastAPI app
-app = FastAPI(title="Disease Prediction API")
+# Load environment variables
+load_dotenv()
 
-# Add CORS middleware
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # Update with specific origins in production
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# Get configuration from environment
+HOST = os.getenv("HOST", "0.0.0.0")
+PORT = int(os.getenv("PORT", 8000))
+ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
+ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "*").split(",")
+MODEL_PATH = os.getenv("MODEL_PATH", "model10.keras")
+METADATA_PATH = os.getenv("METADATA_PATH", "model_metadata.json")
 
 # Global variables for model and data
 model = None
 symptom_columns = None
 disease_labels = None
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Lifespan event handler for startup and shutdown"""
+    global model, symptom_columns, disease_labels
+    
+    # Startup
+    try:
+        # Check if model file exists
+        if not os.path.exists(MODEL_PATH):
+            raise FileNotFoundError(f"Model file not found: {MODEL_PATH}")
+        
+        # Load the trained model
+        model = tf.keras.models.load_model(MODEL_PATH)
+        print(f"✓ Model loaded successfully from {MODEL_PATH}")
+        
+        # Check if metadata file exists
+        if not os.path.exists(METADATA_PATH):
+            raise FileNotFoundError(f"Metadata file not found: {METADATA_PATH}")
+        
+        # Load metadata from JSON file
+        with open(METADATA_PATH, 'r') as f:
+            metadata = json.load(f)
+        
+        symptom_columns = metadata['symptom_columns']
+        print(f"✓ Loaded {len(symptom_columns)} symptom columns from metadata")
+        
+        disease_labels = metadata['disease_labels']
+        print(f"✓ Loaded {len(disease_labels)} disease labels from metadata")
+        
+        print(f"✓ API running in {ENVIRONMENT} mode")
+        
+    except FileNotFoundError as e:
+        print(f"✗ Error: {e}")
+        print(f"   Please ensure all required files are present.")
+        raise
+    except Exception as e:
+        print(f"✗ Error loading model or data: {e}")
+        raise
+    
+    yield
+    
+    # Shutdown
+    print("Shutting down...")
+
+# Initialize FastAPI app
+app = FastAPI(
+    title="Disease Prediction API",
+    description="AI-powered disease prediction based on symptoms",
+    version="1.0.0",
+    docs_url="/docs" if ENVIRONMENT == "development" else None,
+    redoc_url="/redoc" if ENVIRONMENT == "development" else None,
+    lifespan=lifespan
+)
+
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=ALLOWED_ORIGINS if ENVIRONMENT == "production" else ["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Request model
 class SymptomsRequest(BaseModel):
@@ -33,34 +97,6 @@ class PredictionResponse(BaseModel):
     predicted_disease: str
     confidence: float
     top_3_predictions: List[dict]
-
-@app.on_event("startup")
-async def load_model_and_data():
-    """Load the trained model and metadata on startup"""
-    global model, symptom_columns, disease_labels
-    
-    try:
-        # Load the trained model
-        model = tf.keras.models.load_model('model10.keras')
-        print("✓ Model loaded successfully")
-        
-        # Load metadata from JSON file
-        with open('model_metadata.json', 'r') as f:
-            metadata = json.load(f)
-        
-        symptom_columns = metadata['symptom_columns']
-        print(f"✓ Loaded {len(symptom_columns)} symptom columns from metadata")
-        
-        disease_labels = metadata['disease_labels']
-        print(f"✓ Loaded {len(disease_labels)} disease labels from metadata")
-        
-    except FileNotFoundError as e:
-        print(f"✗ Error: metadata file not found. Please run 'setup_metadata.py' first.")
-        print(f"   {e}")
-        raise
-    except Exception as e:
-        print(f"✗ Error loading model or data: {e}")
-        raise
 
 def preprocess_symptoms(symptoms: List[str]) -> np.ndarray:
     """
@@ -89,7 +125,21 @@ async def root():
     return {
         "message": "Disease Prediction API is running",
         "status": "healthy",
-        "model_loaded": model is not None
+        "model_loaded": model is not None,
+        "environment": ENVIRONMENT,
+        "version": "1.0.0"
+    }
+
+@app.get("/health")
+async def health_check():
+    """Detailed health check endpoint"""
+    return {
+        "status": "healthy" if model is not None else "unhealthy",
+        "model_loaded": model is not None,
+        "symptoms_loaded": symptom_columns is not None,
+        "diseases_loaded": disease_labels is not None,
+        "total_symptoms": len(symptom_columns) if symptom_columns else 0,
+        "total_diseases": len(disease_labels) if disease_labels else 0
     }
 
 @app.get("/symptoms")
@@ -210,4 +260,12 @@ async def predict_disease_batch(symptoms_list: List[List[str]]):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    print(f"Starting server on {HOST}:{PORT}")
+    print(f"Environment: {ENVIRONMENT}")
+    print(f"Allowed origins: {ALLOWED_ORIGINS}")
+    uvicorn.run(
+        app, 
+        host=HOST, 
+        port=PORT,
+        log_level="info"
+    )
