@@ -8,6 +8,11 @@ import json
 import os
 from dotenv import load_dotenv
 from contextlib import asynccontextmanager
+import logging
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # Load environment variables
 load_dotenv()
@@ -15,7 +20,7 @@ load_dotenv()
 # Get configuration from environment
 HOST = os.getenv("HOST", "0.0.0.0")
 PORT = int(os.getenv("PORT", 8000))
-ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
+ENVIRONMENT = os.getenv("ENVIRONMENT", "production")
 ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "*").split(",")
 MODEL_PATH = os.getenv("MODEL_PATH", "model10.keras")
 METADATA_PATH = os.getenv("METADATA_PATH", "model_metadata.json")
@@ -32,13 +37,15 @@ async def lifespan(app: FastAPI):
     
     # Startup
     try:
+        logger.info("Loading model and metadata...")
+        
         # Check if model file exists
         if not os.path.exists(MODEL_PATH):
             raise FileNotFoundError(f"Model file not found: {MODEL_PATH}")
         
         # Load the trained model
         model = tf.keras.models.load_model(MODEL_PATH)
-        print(f"✓ Model loaded successfully from {MODEL_PATH}")
+        logger.info(f"✓ Model loaded successfully from {MODEL_PATH}")
         
         # Check if metadata file exists
         if not os.path.exists(METADATA_PATH):
@@ -49,40 +56,39 @@ async def lifespan(app: FastAPI):
             metadata = json.load(f)
         
         symptom_columns = metadata['symptom_columns']
-        print(f"✓ Loaded {len(symptom_columns)} symptom columns from metadata")
+        logger.info(f"✓ Loaded {len(symptom_columns)} symptom columns from metadata")
         
         disease_labels = metadata['disease_labels']
-        print(f"✓ Loaded {len(disease_labels)} disease labels from metadata")
+        logger.info(f"✓ Loaded {len(disease_labels)} disease labels from metadata")
         
-        print(f"✓ API running in {ENVIRONMENT} mode")
+        logger.info(f"✓ API running in {ENVIRONMENT} mode")
         
     except FileNotFoundError as e:
-        print(f"✗ Error: {e}")
-        print(f"   Please ensure all required files are present.")
+        logger.error(f"Error: {e}")
         raise
     except Exception as e:
-        print(f"✗ Error loading model or data: {e}")
+        logger.error(f"Error loading model or data: {e}")
         raise
     
     yield
     
     # Shutdown
-    print("Shutting down...")
+    logger.info("Shutting down...")
 
 # Initialize FastAPI app
 app = FastAPI(
     title="Disease Prediction API",
     description="AI-powered disease prediction based on symptoms",
     version="1.0.0",
-    docs_url="/docs" if ENVIRONMENT == "development" else None,
-    redoc_url="/redoc" if ENVIRONMENT == "development" else None,
+    docs_url="/docs",
+    redoc_url="/redoc",
     lifespan=lifespan
 )
 
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=ALLOWED_ORIGINS if ENVIRONMENT == "production" else ["*"],
+    allow_origins=["*"] if ALLOWED_ORIGINS[0] == "*" else ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -260,9 +266,9 @@ async def predict_disease_batch(symptoms_list: List[List[str]]):
 
 if __name__ == "__main__":
     import uvicorn
-    print(f"Starting server on {HOST}:{PORT}")
-    print(f"Environment: {ENVIRONMENT}")
-    print(f"Allowed origins: {ALLOWED_ORIGINS}")
+    logger.info(f"Starting server on {HOST}:{PORT}")
+    logger.info(f"Environment: {ENVIRONMENT}")
+    logger.info(f"Allowed origins: {ALLOWED_ORIGINS}")
     uvicorn.run(
         app, 
         host=HOST, 
